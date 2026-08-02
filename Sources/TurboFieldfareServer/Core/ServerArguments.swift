@@ -17,8 +17,8 @@ public struct ServerArguments: Equatable, Sendable {
       --model <dir>          Required model directory.
       --port <1...65535>     Loopback port (default 8000).
       --model-id <id>        API model identifier (default derived from the
-                             installed model: gemma-4-26b-a4b-it or
-                             qwen3.6-35b-a3b).
+                             installed model: gemma-4-26b-a4b-it,
+                             qwen3.6-35b-a3b, or qwen3.6-14b-a3b).
       --max-context <tokens> 4096, 8192, 16384, 32768, or 65536 (default 16384).
       --queue-limit <count>  Maximum queued requests (default 4).
       --prompt-cache-mode <off|single-prefix>

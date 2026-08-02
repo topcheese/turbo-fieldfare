@@ -170,10 +170,12 @@ public enum ManifestReader {
     /// A manifest matching one of the shipped production baselines must carry
     /// quantization metadata; toy/synthetic manifests may omit it.
     private static func isProductionArch(_ expected: ArchConfig) -> Bool {
-        for baseline in ArchConfig.knownArchitectures.values {
-            if expected.numLayers == baseline.numLayers,
-               expected.hiddenSize == baseline.hiddenSize {
-                return true
+        for baselines in ArchConfig.knownArchitectures.values {
+            for baseline in baselines {
+                if expected.numLayers == baseline.numLayers,
+                   expected.hiddenSize == baseline.hiddenSize {
+                    return true
+                }
             }
         }
         return false
@@ -275,6 +277,25 @@ public enum ManifestReader {
     /// without arch validation. Used by `Model.load` auto-detection.
     public static func peekFamily(directoryURL: URL,
                                   maxBytes: UInt64 = defaultMaxBytes) throws -> ModelFamily {
+        let manifest = try peekManifest(directoryURL: directoryURL, maxBytes: maxBytes)
+        guard let raw = manifest.arch.family else { return .gemma4 }
+        guard let family = ModelFamily(rawValue: raw) else {
+            throw ModelError.indexCorrupt(detail: "unknown arch.family \"\(raw)\"")
+        }
+        return family
+    }
+
+    /// Decode just enough of `manifest.json` to read the routed-expert count,
+    /// without arch validation. Used by `Model.load` auto-detection to select
+    /// the correct family baseline when a family ships multiple expert counts.
+    public static func peekNumExperts(directoryURL: URL,
+                                      maxBytes: UInt64 = defaultMaxBytes) throws -> Int? {
+        let manifest = try peekManifest(directoryURL: directoryURL, maxBytes: maxBytes)
+        return manifest.arch.numExperts
+    }
+
+    private static func peekManifest(directoryURL: URL,
+                                     maxBytes: UInt64) throws -> Manifest {
         let manifestURL = directoryURL.appendingPathComponent("manifest.json")
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {
             throw ModelError.partialInstall(path: directoryURL.path)
@@ -285,16 +306,10 @@ public enum ManifestReader {
                 detail: "manifest.json size \(size) exceeds metadata cap \(maxBytes)")
         }
         let data = try Data(contentsOf: manifestURL)
-        let manifest: Manifest
         do {
-            manifest = try JSONDecoder().decode(Manifest.self, from: data)
+            return try JSONDecoder().decode(Manifest.self, from: data)
         } catch {
             throw ModelError.indexCorrupt(detail: "manifest.json: \(error)")
         }
-        guard let raw = manifest.arch.family else { return .gemma4 }
-        guard let family = ModelFamily(rawValue: raw) else {
-            throw ModelError.indexCorrupt(detail: "unknown arch.family \"\(raw)\"")
-        }
-        return family
     }
 }

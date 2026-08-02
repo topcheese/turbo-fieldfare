@@ -61,10 +61,25 @@ public struct SupportedModelSource: Sendable, Equatable {
         installedBytes: 19_546_491_213,
         reserveBytes: 1_073_741_824)
 
+    /// Qwen3.6 14B-A3B (FableVibes, MLX q4). Same family and layer pattern as
+    /// the 35B, but 90 routed experts per layer instead of 256, cutting the
+    /// on-disk expert pool from ~18 GB to ~6.4 GB.
+    public static let qwen36_14b = SupportedModelSource(
+        name: "qwen36_14b",
+        displayName: "Qwen3.6 14B-A3B (FableVibes) 4-bit",
+        repoID: "khanh2023/Qwen3.6-14B-A3B-FableVibes-mlx-q4",
+        revision: "560606ec738ab069903fae51c65a2ef7576e4682",
+        sourceIndexSHA256:
+            "bb4f44f3b0d123f3008f1b21b574c708fb2a697d667fb5e111b636f16aa89eae",
+        modelID: "qwen3.6-14b-a3b-4bit",
+        approximateDownloadBytes: 7_745_280_535,
+        installedBytes: 7_750_000_000,
+        reserveBytes: 1_073_741_824)
+
     /// Default source when no `--model` selector is given.
     public static let `default` = gemma4
 
-    public static let all: [SupportedModelSource] = [gemma4, qwen36]
+    public static let all: [SupportedModelSource] = [gemma4, qwen36, qwen36_14b]
 
     public static func named(_ name: String) -> SupportedModelSource? {
         all.first { $0.name == name }

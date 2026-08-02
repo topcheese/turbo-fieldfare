@@ -237,6 +237,46 @@ public struct ArchConfig: Sendable, Equatable {
             convKernelSize: 4)
     )
 
+    /// Qwen3.6 14B-A3B baseline. Same family, layer pattern and shapes as the
+    /// 35B (hidden 2048, 40 layers, head dim 256, ChatML); only the routed
+    /// expert count differs (90 vs 256), which shrinks the on-disk expert pool
+    /// from ~18 GB to ~6.4 GB. Manifest arch must carry `numExperts: 90`.
+    public static let qwen36_14B_A3B = ArchConfig(
+        hiddenSize: 2048,
+        intermediateSize: 512,
+        moeIntermediateSize: 512,
+        numHeads: 16,
+        numKVHeads: 2,
+        numFullKVHeads: 2,
+        headDim: 256,
+        fullHeadDim: 256,
+        vocabSize: 248_320,
+        slidingWindow: 0,
+        finalLogitSoftcap: 0.0,
+        ropeTheta: 10_000_000.0,
+        fullRopeTheta: 10_000_000.0,
+        partialRotaryFactor: 0.25,
+        numLayers: 40,
+        numExperts: 90,
+        topKExperts: 8,
+        tieWordEmbeddings: false,
+        attentionKEqV: false,
+        fullAttentionLayerMask: Self.qwen36LayerMask(),
+        hiddenActivation: "silu",
+        family: .qwen36,
+        attnOutputGate: true,
+        attentionScale: 0.0625,   // 256^-0.5
+        embeddingScaledBySqrtHidden: false,
+        routerScaled: false,
+        ffnSandwichNorms: false,
+        sharedExpertGated: true,
+        ropeNeoxSubdim: true,
+        linearAttention: LinearAttentionConfig(
+            numKHeads: 16, numVHeads: 32,
+            keyHeadDim: 128, valueHeadDim: 128,
+            convKernelSize: 4)
+    )
+
     private static func qwen36LayerMask() -> [UInt8] {
         // Layer kinds: 2 = gated-DeltaNet linear, 1 = full attention on every
         // 4th layer ((i + 1) % 4 == 0).
@@ -246,10 +286,32 @@ public struct ArchConfig: Sendable, Equatable {
     }
 
     /// Registry keyed by `manifest.arch.family` for auto-detection at load.
-    public static let knownArchitectures: [ModelFamily: ArchConfig] = [
-        .gemma4: .gemma4_26B_A4B,
-        .qwen36: .qwen36_35B_A3B,
+    /// Multiple baselines per family are permitted; the variant that matches
+    /// the manifest's `numExperts` is selected (a family can ship models with
+    /// different expert counts, e.g. Qwen3.6 35B at 256 experts and 14B at 90).
+    public static let knownArchitectures: [ModelFamily: [ArchConfig]] = [
+        .gemma4: [.gemma4_26B_A4B],
+        .qwen36: [.qwen36_35B_A3B, .qwen36_14B_A3B],
     ]
+
+    /// First baseline for `family` (the historical default). Used where only
+    /// the family is known and no variant selection is available.
+    public static func defaultBaseline(for family: ModelFamily) -> ArchConfig? {
+        knownArchitectures[family]?.first
+    }
+
+    /// Baseline for `family` whose `numExperts` matches `numExperts`, falling
+    /// back to the first baseline when nothing matches.
+    public static func baseline(for family: ModelFamily,
+                                numExperts: Int?) -> ArchConfig? {
+        guard let baselines = knownArchitectures[family] else { return nil }
+        if let numExperts {
+            if let exact = baselines.first(where: { $0.numExperts == numExperts }) {
+                return exact
+            }
+        }
+        return baselines.first
+    }
 
     /// Resident INT4 GEMV shapes this architecture issues during decode, for
     /// pipeline specialization. Constant-folding the loop bounds measurably

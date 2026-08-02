@@ -110,10 +110,16 @@ public actor ServerModelSession: ServerInferenceBackend {
     public nonisolated var defaultModelID: String {
         switch modelFamily {
         case .gemma4: return "gemma-4-26b-a4b-it"
-        case .qwen36: return "qwen3.6-35b-a3b"
+        case .qwen36:
+            return numExperts == 90
+                ? "qwen3.6-14b-a3b"
+                : "qwen3.6-35b-a3b"
         }
     }
     private nonisolated let modelFamily: ModelFamily
+    /// Routed-expert count, captured at load so the API model identifier can
+    /// distinguish Qwen3.6 variants (90 = 14B, 256 = 35B).
+    private nonisolated let numExperts: Int
 
     private let context: MetalContext
     private let model: Model
@@ -199,6 +205,7 @@ public actor ServerModelSession: ServerInferenceBackend {
         self.tokenizer = tokenizer
         self.chatDialect = tokenizer.dialect
         self.modelFamily = model.config.family
+        self.numExperts = model.config.numExperts
         self.runner = runner
         self.scratch = scratch
         self.prefillConfig = prefillConfig

@@ -24,7 +24,8 @@ public enum AppModelInstallationProbe {
 
         do {
             let family = try ManifestReader.peekFamily(directoryURL: directory)
-            guard let baseline = ArchConfig.knownArchitectures[family] else {
+            let numExperts = try ManifestReader.peekNumExperts(directoryURL: directory)
+            guard let baseline = ArchConfig.baseline(for: family, numExperts: numExperts) else {
                 return .partial("unknown model family \(family.rawValue)")
             }
             let manifest = try ManifestReader.load(directoryURL: directory, expecting: baseline)

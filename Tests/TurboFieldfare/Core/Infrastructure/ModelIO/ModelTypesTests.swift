@@ -32,4 +32,28 @@ import Foundation
         let e3 = ModelError.checksumMismatch(file: "model_weights.bin")
         #expect(e3.description.contains("model_weights.bin"))
     }
+
+    @Test func qwen36_14B_BaselineUses90Experts() {
+        let a = ArchConfig.qwen36_14B_A3B
+        #expect(a.hiddenSize == 2048)
+        #expect(a.numLayers == 40)
+        #expect(a.numExperts == 90)
+        #expect(a.topKExperts == 8)
+        #expect(a.vocabSize == 248320)
+        #expect(a.family == .qwen36)
+        // Same linear/full attention pattern as the 35B.
+        #expect(a.fullAttentionLayerMask == ArchConfig.qwen36_35B_A3B.fullAttentionLayerMask)
+        #expect(a.linearAttention == ArchConfig.qwen36_35B_A3B.linearAttention)
+    }
+
+    @Test func baselineSelectionPicksVariantByNumExperts() {
+        #expect(ArchConfig.baseline(for: .qwen36, numExperts: 90)?.numExperts == 90)
+        #expect(ArchConfig.baseline(for: .qwen36, numExperts: 256)?.numExperts == 256)
+        // Unknown expert count falls back to the first (default) baseline.
+        #expect(ArchConfig.baseline(for: .qwen36, numExperts: 128)?.numExperts == 256)
+        #expect(ArchConfig.baseline(for: .qwen36, numExperts: nil)?.numExperts == 256)
+        // Gemma has one baseline; selection is stable.
+        #expect(ArchConfig.baseline(for: .gemma4, numExperts: nil)?.numExperts == 128)
+        #expect(ArchConfig.defaultBaseline(for: .qwen36)?.numExperts == 256)
+    }
 }
