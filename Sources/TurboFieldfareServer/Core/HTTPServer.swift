@@ -424,10 +424,10 @@ private final class ServerHTTPHandler: ChannelInboundHandler, @unchecked Sendabl
                                   context: ChannelHandlerContext,
                                   stream: Bool) {
         if stream {
-            let contextBox = SendableContext(context)
-            context.eventLoop.execute {
-                contextBox.value.close(promise: nil)
-            }
+            let envelope = (error as? ServerRequestError)?.envelope
+                ?? OpenAIErrorEnvelope(message: "generation failed",
+                                       code: "internal_error")
+            writeStreamError(context, envelope)
             return
         }
         if let requestError = error as? ServerRequestError {
@@ -437,6 +437,27 @@ private final class ServerHTTPHandler: ChannelInboundHandler, @unchecked Sendabl
             writeError(context, status: .internalServerError,
                        OpenAIErrorEnvelope(message: "generation failed",
                                            code: "internal_error"))
+        }
+    }
+
+    private func writeStreamError(_ context: ChannelHandlerContext,
+                                  _ envelope: OpenAIErrorEnvelope) {
+        guard let data = try? JSONEncoder().encode(envelope) else {
+            let contextBox = SendableContext(context)
+            context.eventLoop.execute {
+                contextBox.value.close(promise: nil)
+            }
+            return
+        }
+        let contextBox = SendableContext(context)
+        context.eventLoop.execute {
+            var buffer = contextBox.value.channel.allocator.buffer(capacity: data.count + 24)
+            buffer.writeString("data: ")
+            buffer.writeBytes(data)
+            buffer.writeString("\n\n")
+            buffer.writeString("data: [DONE]\n\n")
+            contextBox.value.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+            contextBox.value.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
         }
     }
 
