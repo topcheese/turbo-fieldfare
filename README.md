@@ -265,7 +265,7 @@ swift build -c release --product TurboFieldfareServer
   --model scratch/gemma4.gturbo
 ```
 
-It listens on `http://127.0.0.1:8080/v1` and supports Chat Completions,
+It listens on `http://127.0.0.1:8000/v1` and supports Chat Completions,
 streaming, function tools, and single-prefix prompt reuse. The client must
 authorize and run every tool call. Keep the server on loopback; it has no
 remote authentication or TLS.

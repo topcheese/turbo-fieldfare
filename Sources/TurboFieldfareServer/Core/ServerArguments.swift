@@ -15,7 +15,7 @@ public struct ServerArguments: Equatable, Sendable {
     usage: TurboFieldfareServer --model <completed .gturbo directory> [options]
 
       --model <dir>          Required model directory.
-      --port <1...65535>     Loopback port (default 8080).
+      --port <1...65535>     Loopback port (default 8000).
       --model-id <id>        API model identifier (default derived from the
                              installed model: gemma-4-26b-a4b-it or
                              qwen3.6-35b-a3b).
@@ -28,7 +28,7 @@ public struct ServerArguments: Equatable, Sendable {
 
     public static func parse(_ input: [String]) throws -> ServerArguments {
         var model: String?
-        var port = 8080
+        var port = 8000
         var modelIDOverride: String?
         var maxContext = 16_384
         var queueLimit = 4

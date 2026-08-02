@@ -19,7 +19,7 @@ If the command prints a match, do not start the server.
 swift build -c release --product TurboFieldfareServer
 .build/release/TurboFieldfareServer \
   --model scratch/gemma4.gturbo \
-  --port 8080 \
+  --port 8000 \
   --max-context 16384
 ```
 
@@ -30,9 +30,9 @@ it.
 Check the server from another terminal:
 
 ```bash
-curl --silent --show-error http://127.0.0.1:8080/health
-curl --silent --show-error http://127.0.0.1:8080/v1/models
-curl --silent --show-error http://127.0.0.1:8080/v1/chat/completions \
+curl --silent --show-error http://127.0.0.1:8000/health
+curl --silent --show-error http://127.0.0.1:8000/v1/models
+curl --silent --show-error http://127.0.0.1:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "gemma-4-26b-a4b-it",
@@ -47,7 +47,7 @@ By default, the server runs one generation and queues up to four requests. Use
 
 ## Connect a client
 
-The base URL is `http://127.0.0.1:8080/v1`. Some client libraries require an
+The base URL is `http://127.0.0.1:8000/v1`. Some client libraries require an
 API key, but the server ignores it.
 
 Python:
@@ -55,7 +55,7 @@ Python:
 ```python
 from openai import OpenAI
 
-client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="local")
+client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="local")
 response = client.chat.completions.create(
     model="gemma-4-26b-a4b-it",
     messages=[{"role": "user", "content": "Say hello in one sentence."}],
@@ -73,7 +73,7 @@ OpenCode:
       "npm": "@ai-sdk/openai-compatible",
       "name": "TurboFieldfare",
       "options": {
-        "baseURL": "http://127.0.0.1:8080/v1",
+        "baseURL": "http://127.0.0.1:8000/v1",
         "apiKey": "local"
       },
       "models": {
