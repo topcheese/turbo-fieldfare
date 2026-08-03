@@ -11,6 +11,7 @@ public struct ServerArguments: Equatable, Sendable {
     public let queueLimit: Int
     public let promptCacheMode: ServerPromptCacheMode
     public let expertCacheSlots: Int?
+    public let rdadvise: String?
 
     public static let usage = """
     usage: TurboFieldfareServer --model <completed .gturbo directory> [options]
@@ -28,6 +29,8 @@ public struct ServerArguments: Equatable, Sendable {
                                 24, 32, or 90. Default auto: cache the whole
                                 expert pool when the model is small enough
                                 (90 slots), else 16.
+      --rdadvise <mode>      Expert read-ahead advice: off, default, bounded,
+                             or adaptive (default off).
       --help                 Show this help.
     """
 
@@ -39,6 +42,7 @@ public struct ServerArguments: Equatable, Sendable {
         var queueLimit = 4
         var promptCacheMode: ServerPromptCacheMode = .singlePrefix
         var expertCacheSlots: Int? = nil
+        var rdadvise: String? = nil
         var index = 0
         while index < input.count {
             let flag = input[index]
@@ -84,6 +88,11 @@ public struct ServerArguments: Equatable, Sendable {
                     throw ServerArgumentError.invalid("--expert-cache-slots is not supported")
                 }
                 expertCacheSlots = parsed
+            case "--rdadvise":
+                guard ["off", "default", "bounded", "adaptive"].contains(value.lowercased()) else {
+                    throw ServerArgumentError.invalid("--rdadvise is not supported")
+                }
+                rdadvise = value
             default:
                 throw ServerArgumentError.invalid("unknown flag: \(flag)")
             }
@@ -95,7 +104,8 @@ public struct ServerArguments: Equatable, Sendable {
                                maxContext: maxContext,
                                queueLimit: queueLimit,
                                promptCacheMode: promptCacheMode,
-                               expertCacheSlots: expertCacheSlots)
+                               expertCacheSlots: expertCacheSlots,
+                               rdadvise: rdadvise)
     }
 }
 

@@ -135,7 +135,8 @@ public actor ServerModelSession: ServerInferenceBackend {
     public static func load(modelDirectory: URL,
                              maxContext: Int,
                              promptCacheMode: ServerPromptCacheMode = .singlePrefix,
-                             expertCacheSlots: Int? = nil) async throws -> ServerModelSession {
+                             expertCacheSlots: Int? = nil,
+                             rdadvise: String? = nil) async throws -> ServerModelSession {
         let tokenizerFolder = GFTokenizer.tokenizerFolder(forModelDirectory: modelDirectory)
         guard let tokenizerFolder else {
             throw GFTokenizerError.missingToolTemplate
@@ -159,6 +160,7 @@ public actor ServerModelSession: ServerInferenceBackend {
             resolvedSlots = 16
         }
         let runtime = RuntimeConfiguration(expertCacheSlots: resolvedSlots,
+                                            rdadvisePolicy: RDAdvicePolicyMode.parse(rdadvise),
                                             forceLogitsHead: true)
         let model = try Model.load(
             directoryURL: modelDirectory,
