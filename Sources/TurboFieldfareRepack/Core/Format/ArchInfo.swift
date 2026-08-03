@@ -58,9 +58,9 @@ struct ArchInfo: Sendable, Equatable {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw RepackError.configJsonInvalid(path: configPath, detail: "not a JSON object")
         }
-        guard let tc = root["text_config"] as? [String: Any] else {
-            throw RepackError.configJsonInvalid(path: configPath, detail: "no text_config")
-        }
+        // Multimodal checkpoints wrap the LM arch in `text_config`; text-only
+        // checkpoints put the fields at the top level. Accept both.
+        let tc = (root["text_config"] as? [String: Any]) ?? root
         if (root["model_type"] as? String) == "qwen3_5_moe" {
             return try loadQwen36(configPath: configPath, tc: tc)
         }

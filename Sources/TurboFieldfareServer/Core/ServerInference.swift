@@ -133,8 +133,9 @@ public actor ServerModelSession: ServerInferenceBackend {
     private var promptCache = ServerPromptCache()
 
     public static func load(modelDirectory: URL,
-                            maxContext: Int,
-                            promptCacheMode: ServerPromptCacheMode = .singlePrefix) async throws -> ServerModelSession {
+                             maxContext: Int,
+                             promptCacheMode: ServerPromptCacheMode = .singlePrefix,
+                             expertCacheSlots: Int? = nil) async throws -> ServerModelSession {
         let tokenizerFolder = GFTokenizer.tokenizerFolder(forModelDirectory: modelDirectory)
         guard let tokenizerFolder else {
             throw GFTokenizerError.missingToolTemplate
@@ -145,7 +146,20 @@ public actor ServerModelSession: ServerInferenceBackend {
         }
         let tokenizer = try await GFTokenizer.load(from: tokenizerFolder)
         let context = try MetalContext()
-        let runtime = RuntimeConfiguration(forceLogitsHead: true)
+        // Auto-size the expert cache to the model: cache the whole routed-expert
+        // pool when the arch is small enough (90 slots), else fall back to the
+        // 2 GB-footprint default of 16. An explicit flag overrides.
+        let numExperts = try ManifestReader.peekNumExperts(directoryURL: modelDirectory)
+        let resolvedSlots: Int
+        if let expertCacheSlots {
+            resolvedSlots = expertCacheSlots
+        } else if let numExperts, numExperts <= 90 {
+            resolvedSlots = 90
+        } else {
+            resolvedSlots = 16
+        }
+        let runtime = RuntimeConfiguration(expertCacheSlots: resolvedSlots,
+                                            forceLogitsHead: true)
         let model = try Model.load(
             directoryURL: modelDirectory,
             device: context.device,

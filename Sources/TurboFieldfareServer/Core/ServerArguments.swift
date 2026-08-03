@@ -10,6 +10,7 @@ public struct ServerArguments: Equatable, Sendable {
     public let maxContext: Int
     public let queueLimit: Int
     public let promptCacheMode: ServerPromptCacheMode
+    public let expertCacheSlots: Int?
 
     public static let usage = """
     usage: TurboFieldfareServer --model <completed .gturbo directory> [options]
@@ -23,6 +24,10 @@ public struct ServerArguments: Equatable, Sendable {
       --queue-limit <count>  Maximum queued requests (default 4).
       --prompt-cache-mode <off|single-prefix>
                              Prompt KV reuse mode (default single-prefix).
+      --expert-cache-slots <n>  Routed-expert cache slots per layer: 8, 16,
+                                24, 32, or 90. Default auto: cache the whole
+                                expert pool when the model is small enough
+                                (90 slots), else 16.
       --help                 Show this help.
     """
 
@@ -33,6 +38,7 @@ public struct ServerArguments: Equatable, Sendable {
         var maxContext = 16_384
         var queueLimit = 4
         var promptCacheMode: ServerPromptCacheMode = .singlePrefix
+        var expertCacheSlots: Int? = nil
         var index = 0
         while index < input.count {
             let flag = input[index]
@@ -72,6 +78,12 @@ public struct ServerArguments: Equatable, Sendable {
                         "--prompt-cache-mode must be off or single-prefix")
                 }
                 promptCacheMode = parsed
+            case "--expert-cache-slots":
+                guard let parsed = Int(value),
+                      [8, 16, 24, 32, 90].contains(parsed) else {
+                    throw ServerArgumentError.invalid("--expert-cache-slots is not supported")
+                }
+                expertCacheSlots = parsed
             default:
                 throw ServerArgumentError.invalid("unknown flag: \(flag)")
             }
@@ -82,7 +94,8 @@ public struct ServerArguments: Equatable, Sendable {
                                modelIDOverride: modelIDOverride,
                                maxContext: maxContext,
                                queueLimit: queueLimit,
-                               promptCacheMode: promptCacheMode)
+                               promptCacheMode: promptCacheMode,
+                               expertCacheSlots: expertCacheSlots)
     }
 }
 
