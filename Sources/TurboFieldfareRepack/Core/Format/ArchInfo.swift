@@ -58,9 +58,9 @@ struct ArchInfo: Sendable, Equatable {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw RepackError.configJsonInvalid(path: configPath, detail: "not a JSON object")
         }
-        guard let tc = root["text_config"] as? [String: Any] else {
-            throw RepackError.configJsonInvalid(path: configPath, detail: "no text_config")
-        }
+        // Multimodal checkpoints wrap the LM arch in `text_config`; text-only
+        // checkpoints put the fields at the top level. Accept both.
+        let tc = (root["text_config"] as? [String: Any]) ?? root
         if (root["model_type"] as? String) == "qwen3_5_moe" {
             return try loadQwen36(configPath: configPath, tc: tc)
         }
@@ -213,56 +213,62 @@ struct ArchInfo: Sendable, Equatable {
         return arch
     }
 
-    /// Production Qwen3.6-35B-A3B baseline (mirrors the runtime's
-    /// `ArchConfig.qwen36_35B_A3B`; the repack target has no dependency on the
-    /// runtime module). A config that matches the production shape
-    /// (hidden 2048, 40 layers) must agree on every field; toy/synthetic
-    /// configs are exempt.
+    /// Production Qwen3.6 baselines (mirrors the runtime's
+    /// `ArchConfig.qwen36_35B_A3B` / `qwen36_14B_A3B`; the repack target has no
+    /// dependency on the runtime module). A config that matches the production
+    /// shape (hidden 2048, 40 layers) must agree on every field except the
+    /// routed-expert count, which varies by variant (256 for 35B, 90 for 14B);
+    /// toy/synthetic configs are exempt.
     private static func crossCheckProductionQwen36(_ a: ArchInfo,
                                                    configPath: String) throws {
         guard a.hiddenSize == 2048, a.numLayers == 40 else { return }
         var expectedMask = [UInt8](repeating: 2, count: 40)
         for i in stride(from: 3, to: 40, by: 4) { expectedMask[i] = 1 }
-        let expected = ArchInfo(
-            hiddenSize: 2048,
-            intermediateSize: 512,
-            moeIntermediateSize: 512,
-            numHeads: 16,
-            numKVHeads: 2,
-            numFullKVHeads: 2,
-            headDim: 256,
-            fullHeadDim: 256,
-            vocabSize: 248_320,
-            slidingWindow: 0,
-            finalLogitSoftcap: 0.0,
-            ropeTheta: 10_000_000.0,
-            fullRopeTheta: 10_000_000.0,
-            partialRotaryFactor: 0.25,
-            numLayers: 40,
-            numExperts: 256,
-            topKExperts: 8,
-            tieWordEmbeddings: false,
-            attentionKEqV: false,
-            fullAttentionLayerMask: expectedMask,
-            hiddenActivation: "silu",
-            family: .qwen36,
-            attnOutputGate: true,
-            attentionScale: 0.0625,
-            embeddingScaledBySqrtHidden: false,
-            routerScaled: false,
-            ffnSandwichNorms: false,
-            sharedExpertGated: true,
-            ropeNeoxSubdim: true,
-            linearNumKHeads: 16,
-            linearNumVHeads: 32,
-            linearKeyHeadDim: 128,
-            linearValueHeadDim: 128,
-            linearConvKernelSize: 4)
-        guard a == expected else {
+        func baseline(numExperts: Int) -> ArchInfo {
+            ArchInfo(
+                hiddenSize: 2048,
+                intermediateSize: 512,
+                moeIntermediateSize: 512,
+                numHeads: 16,
+                numKVHeads: 2,
+                numFullKVHeads: 2,
+                headDim: 256,
+                fullHeadDim: 256,
+                vocabSize: 248_320,
+                slidingWindow: 0,
+                finalLogitSoftcap: 0.0,
+                ropeTheta: 10_000_000.0,
+                fullRopeTheta: 10_000_000.0,
+                partialRotaryFactor: 0.25,
+                numLayers: 40,
+                numExperts: numExperts,
+                topKExperts: 8,
+                tieWordEmbeddings: false,
+                attentionKEqV: false,
+                fullAttentionLayerMask: expectedMask,
+                hiddenActivation: "silu",
+                family: .qwen36,
+                attnOutputGate: true,
+                attentionScale: 0.0625,
+                embeddingScaledBySqrtHidden: false,
+                routerScaled: false,
+                ffnSandwichNorms: false,
+                sharedExpertGated: true,
+                ropeNeoxSubdim: true,
+                linearNumKHeads: 16,
+                linearNumVHeads: 32,
+                linearKeyHeadDim: 128,
+                linearValueHeadDim: 128,
+                linearConvKernelSize: 4)
+        }
+        let accepted: [Int] = [256, 90]
+        guard accepted.contains(a.numExperts),
+              a == baseline(numExperts: a.numExperts) else {
             throw RepackError.configJsonInvalid(
                 path: configPath,
-                detail: "qwen3_5_moe config does not match the pinned "
-                    + "Qwen3.6-35B-A3B architecture baseline")
+                detail: "qwen3_5_moe config does not match a pinned "
+                    + "Qwen3.6 architecture baseline (35B at 256 experts "
+                    + "or 14B at 90 experts)")
         }
     }
 }

@@ -19,7 +19,9 @@ do {
     let backend = try await ServerModelSession.load(
         modelDirectory: modelURL,
         maxContext: arguments.maxContext,
-        promptCacheMode: arguments.promptCacheMode)
+        promptCacheMode: arguments.promptCacheMode,
+        expertCacheSlots: arguments.expertCacheSlots,
+        rdadvise: arguments.rdadvise)
     let modelID = arguments.modelIDOverride ?? backend.defaultModelID
     let server = TurboFieldfareHTTPServer(
         modelID: modelID,

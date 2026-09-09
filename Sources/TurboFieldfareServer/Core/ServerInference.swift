@@ -110,10 +110,16 @@ public actor ServerModelSession: ServerInferenceBackend {
     public nonisolated var defaultModelID: String {
         switch modelFamily {
         case .gemma4: return "gemma-4-26b-a4b-it"
-        case .qwen36: return "qwen3.6-35b-a3b"
+        case .qwen36:
+            return numExperts == 90
+                ? "qwen3.6-14b-a3b"
+                : "qwen3.6-35b-a3b"
         }
     }
     private nonisolated let modelFamily: ModelFamily
+    /// Routed-expert count, captured at load so the API model identifier can
+    /// distinguish Qwen3.6 variants (90 = 14B, 256 = 35B).
+    private nonisolated let numExperts: Int
 
     private let context: MetalContext
     private let model: Model
@@ -127,8 +133,10 @@ public actor ServerModelSession: ServerInferenceBackend {
     private var promptCache = ServerPromptCache()
 
     public static func load(modelDirectory: URL,
-                            maxContext: Int,
-                            promptCacheMode: ServerPromptCacheMode = .singlePrefix) async throws -> ServerModelSession {
+                             maxContext: Int,
+                             promptCacheMode: ServerPromptCacheMode = .singlePrefix,
+                             expertCacheSlots: Int? = nil,
+                             rdadvise: String? = nil) async throws -> ServerModelSession {
         let tokenizerFolder = GFTokenizer.tokenizerFolder(forModelDirectory: modelDirectory)
         guard let tokenizerFolder else {
             throw GFTokenizerError.missingToolTemplate
@@ -139,7 +147,21 @@ public actor ServerModelSession: ServerInferenceBackend {
         }
         let tokenizer = try await GFTokenizer.load(from: tokenizerFolder)
         let context = try MetalContext()
-        let runtime = RuntimeConfiguration(forceLogitsHead: true)
+        // Auto-size the expert cache to the model: cache the whole routed-expert
+        // pool when the arch is small enough (90 slots), else fall back to the
+        // 2 GB-footprint default of 16. An explicit flag overrides.
+        let numExperts = try ManifestReader.peekNumExperts(directoryURL: modelDirectory)
+        let resolvedSlots: Int
+        if let expertCacheSlots {
+            resolvedSlots = expertCacheSlots
+        } else if let numExperts, numExperts <= 90 {
+            resolvedSlots = 90
+        } else {
+            resolvedSlots = 16
+        }
+        let runtime = RuntimeConfiguration(expertCacheSlots: resolvedSlots,
+                                            rdadvisePolicy: RDAdvicePolicyMode.parse(rdadvise),
+                                            forceLogitsHead: true)
         let model = try Model.load(
             directoryURL: modelDirectory,
             device: context.device,
@@ -199,6 +221,7 @@ public actor ServerModelSession: ServerInferenceBackend {
         self.tokenizer = tokenizer
         self.chatDialect = tokenizer.dialect
         self.modelFamily = model.config.family
+        self.numExperts = model.config.numExperts
         self.runner = runner
         self.scratch = scratch
         self.prefillConfig = prefillConfig

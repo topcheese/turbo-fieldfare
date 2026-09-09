@@ -69,6 +69,36 @@ struct QwenRepackPlannerTests {
         }
     }
 
+    @Test func productionQwen14BWith90ExpertsCrossChecks() throws {
+        let root = temporaryRoot("qwen-14b")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let configPath = (root as NSString).appendingPathComponent("config.json")
+        try writeProductionConfig(to: configPath, mutate: { tc in
+            tc["num_experts"] = 90
+        })
+
+        let arch = try ArchInfo.load(configPath: configPath)
+        #expect(arch.family == .qwen36)
+        #expect(arch.hiddenSize == 2048)
+        #expect(arch.numLayers == 40)
+        #expect(arch.numExperts == 90)
+        #expect(arch.topKExperts == 8)
+        #expect(arch.fullAttentionLayerMask.filter { $0 == 1 }.count == 10)
+    }
+
+    @Test func productionQwenRejectsUnknownExpertCount() throws {
+        let root = temporaryRoot("qwen-bad")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let configPath = (root as NSString).appendingPathComponent("config.json")
+        try writeProductionConfig(to: configPath, mutate: { tc in
+            tc["num_experts"] = 128
+        })
+
+        #expect(throws: RepackError.self) {
+            _ = try ArchInfo.load(configPath: configPath)
+        }
+    }
+
     @Test func productionQwenConfigMismatchIsRejected() throws {
         let root = temporaryRoot("qwen-prod-bad")
         defer { try? FileManager.default.removeItem(atPath: root) }

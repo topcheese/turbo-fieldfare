@@ -10,6 +10,8 @@ public struct ServerArguments: Equatable, Sendable {
     public let maxContext: Int
     public let queueLimit: Int
     public let promptCacheMode: ServerPromptCacheMode
+    public let expertCacheSlots: Int?
+    public let rdadvise: String?
 
     public static let usage = """
     usage: TurboFieldfareServer --model <completed .gturbo directory> [options]
@@ -17,12 +19,18 @@ public struct ServerArguments: Equatable, Sendable {
       --model <dir>          Required model directory.
       --port <1...65535>     Loopback port (default 8000).
       --model-id <id>        API model identifier (default derived from the
-                             installed model: gemma-4-26b-a4b-it or
-                             qwen3.6-35b-a3b).
+                             installed model: gemma-4-26b-a4b-it,
+                             qwen3.6-35b-a3b, or qwen3.6-14b-a3b).
       --max-context <tokens> 4096, 8192, 16384, 32768, or 65536 (default 16384).
       --queue-limit <count>  Maximum queued requests (default 4).
       --prompt-cache-mode <off|single-prefix>
                              Prompt KV reuse mode (default single-prefix).
+      --expert-cache-slots <n>  Routed-expert cache slots per layer: 8, 16,
+                                24, 32, or 90. Default auto: cache the whole
+                                expert pool when the model is small enough
+                                (90 slots), else 16.
+      --rdadvise <mode>      Expert read-ahead advice: off, default, bounded,
+                             or adaptive (default off).
       --help                 Show this help.
     """
 
@@ -33,6 +41,8 @@ public struct ServerArguments: Equatable, Sendable {
         var maxContext = 16_384
         var queueLimit = 4
         var promptCacheMode: ServerPromptCacheMode = .singlePrefix
+        var expertCacheSlots: Int? = nil
+        var rdadvise: String? = nil
         var index = 0
         while index < input.count {
             let flag = input[index]
@@ -72,6 +82,17 @@ public struct ServerArguments: Equatable, Sendable {
                         "--prompt-cache-mode must be off or single-prefix")
                 }
                 promptCacheMode = parsed
+            case "--expert-cache-slots":
+                guard let parsed = Int(value),
+                      [8, 16, 24, 32, 90].contains(parsed) else {
+                    throw ServerArgumentError.invalid("--expert-cache-slots is not supported")
+                }
+                expertCacheSlots = parsed
+            case "--rdadvise":
+                guard ["off", "default", "bounded", "adaptive"].contains(value.lowercased()) else {
+                    throw ServerArgumentError.invalid("--rdadvise is not supported")
+                }
+                rdadvise = value
             default:
                 throw ServerArgumentError.invalid("unknown flag: \(flag)")
             }
@@ -82,7 +103,9 @@ public struct ServerArguments: Equatable, Sendable {
                                modelIDOverride: modelIDOverride,
                                maxContext: maxContext,
                                queueLimit: queueLimit,
-                               promptCacheMode: promptCacheMode)
+                               promptCacheMode: promptCacheMode,
+                               expertCacheSlots: expertCacheSlots,
+                               rdadvise: rdadvise)
     }
 }
 

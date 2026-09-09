@@ -371,7 +371,8 @@ extension Model {
                             integrityPolicy: ModelIntegrityPolicy? = nil,
                             loadStats: UnsafeMutablePointer<ModelLoadStats>? = nil) throws -> Model {
         let family = try ManifestReader.peekFamily(directoryURL: directoryURL)
-        guard let baseline = ArchConfig.knownArchitectures[family] else {
+        let numExperts = try ManifestReader.peekNumExperts(directoryURL: directoryURL)
+        guard let baseline = ArchConfig.baseline(for: family, numExperts: numExperts) else {
             throw ModelError.indexCorrupt(detail: "no baseline for family \(family.rawValue)")
         }
         return try load(directoryURL: directoryURL,
